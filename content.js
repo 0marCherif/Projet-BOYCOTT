@@ -1,133 +1,114 @@
 // ====================================
-// BOYCOTT CHECKER - Content Script
+// BOYCOTT CHECKER - Content Script v2
+// Approche simple : scan du texte de la page
 // ====================================
 
 let boycottedBrands = [];
 let isEnabled = true;
-let foundProducts = [];
+let foundElements = [];
 let alertBanner = null;
-
-// Patterns pour détecter les pages panier sur différents sites
-const CART_PAGE_PATTERNS = [
-  // URLs
-  /cart/i,
-  /panier/i,
-  /basket/i,
-  /bag/i,
-  /checkout/i,
-  /warenkorb/i,
-  /carrito/i,
-  /carrello/i,
-  /winkelwagen/i,
-  /koszyk/i,
-  // Sélecteurs de pages panier courants
-  'cart', 'shopping-cart', 'panier', 'basket'
-];
-
-// Sites e-commerce populaires avec leurs sélecteurs spécifiques
-const SITE_CONFIGS = {
-  'amazon': {
-    cartSelector: '#sc-active-cart, #activeCartViewForm, .sc-list-item',
-    productSelector: '.sc-list-item, .sc-item-content-group',
-    nameSelector: '.sc-product-title, .sc-item-product-title, a.a-link-normal',
-  },
-  'cdiscount': {
-    cartSelector: '.lpMain, .cart-product-list',
-    productSelector: '.lpInfo, .cart-product',
-    nameSelector: '.prdtBILTit, .product-name',
-  },
-  'fnac': {
-    cartSelector: '.cart-content, .f-basketPage',
-    productSelector: '.Article, .f-productCard',
-    nameSelector: '.Article-desc, .f-productCard-title',
-  },
-  'carrefour': {
-    cartSelector: '.cart-items, .pl-cart-content',
-    productSelector: '.cart-item, .pl-product',
-    nameSelector: '.product-name, .pl-product-title',
-  },
-  'leclerc': {
-    cartSelector: '.cart-content',
-    productSelector: '.cart-product',
-    nameSelector: '.product-title',
-  },
-  'auchan': {
-    cartSelector: '.cart-content, .basket-products',
-    productSelector: '.cart-product, .basket-product-item',
-    nameSelector: '.product-name, .product-title',
-  },
-  'default': {
-    cartSelector: '[class*="cart"], [class*="panier"], [class*="basket"], [id*="cart"], [id*="panier"], [id*="basket"]',
-    productSelector: '[class*="product"], [class*="item"], [class*="article"], li, tr, .row',
-    nameSelector: '[class*="name"], [class*="title"], [class*="product"], h2, h3, h4, a',
-  }
-};
 
 // ====================================
 // INITIALISATION
 // ====================================
 
 async function init() {
+  console.log('[Boycott Checker] Initialisation...');
   await loadSettings();
   
-  if (!isEnabled) return;
-  
-  // Vérifier si c'est une page panier
-  if (isCartPage()) {
-    console.log('[Boycott Checker] Page panier détectée!');
-    scanPage();
+  if (!isEnabled) {
+    console.log('[Boycott Checker] Extension désactivée');
+    return;
   }
   
-  // Observer les changements dans le DOM (pour les SPA)
+  console.log('[Boycott Checker] Marques à surveiller:', boycottedBrands);
+  
+  // Scanner la page après un court délai (pour laisser le contenu charger)
+  setTimeout(() => {
+    scanPageForBrands();
+  }, 1000);
+  
+  // Observer les changements dans le DOM (pour les SPA et contenu dynamique)
   observeDOM();
 }
 
 async function loadSettings() {
   try {
     const result = await chrome.storage.local.get(['brands', 'isEnabled']);
-    boycottedBrands = result.brands || [];
+    boycottedBrands = result.brands || getDefaultBrands();
     isEnabled = result.isEnabled !== undefined ? result.isEnabled : true;
+    console.log('[Boycott Checker] Settings chargés:', { brandsCount: boycottedBrands.length, isEnabled });
   } catch (error) {
     console.error('[Boycott Checker] Erreur chargement settings:', error);
+    boycottedBrands = getDefaultBrands();
   }
 }
 
+function getDefaultBrands() {
+  return [
+    'Coca-Cola',
+    'Pepsi',
+    'Nestlé',
+    'McDonald\'s',
+    'Starbucks',
+    'KFC',
+    'Pizza Hut',
+    'Burger King',
+    'Danone',
+    'Puma',
+    'HP',
+    'Carrefour',
+    'Lay\'s',
+    'Doritos',
+    'Lipton',
+    'Schweppes',
+    'Fanta',
+    'Sprite',
+    'Tropicana',
+    'Activia',
+    'Evian',
+    'Maggi',
+    'Nescafé',
+    'Kit Kat',
+    'Häagen-Dazs'
+  ];
+}
+
 // ====================================
-// DÉTECTION DE PAGE PANIER
+// NORMALISATION DU TEXTE
 // ====================================
 
-function isCartPage() {
-  const url = window.location.href.toLowerCase();
-  const path = window.location.pathname.toLowerCase();
+function normalizeText(text) {
+  return text
+    .toLowerCase()
+    // Supprimer les accents
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Remplacer les tirets et underscores par des espaces
+    .replace(/[-_]/g, ' ')
+    // Supprimer les apostrophes
+    .replace(/[''`]/g, '')
+    // Supprimer la ponctuation
+    .replace(/[.,!?;:]/g, ' ')
+    // Réduire les espaces multiples
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Vérifier si une marque est dans le texte (avec plusieurs variantes)
+function brandMatchesText(brand, text) {
+  const normalizedText = normalizeText(text);
+  const normalizedBrand = normalizeText(brand);
   
-  // Vérifier l'URL
-  for (const pattern of CART_PAGE_PATTERNS) {
-    if (pattern instanceof RegExp) {
-      if (pattern.test(url) || pattern.test(path)) return true;
-    } else if (url.includes(pattern) || path.includes(pattern)) {
-      return true;
-    }
+  // Recherche directe normalisée
+  if (normalizedText.includes(normalizedBrand)) {
+    return true;
   }
   
-  // Vérifier les éléments de la page
-  const cartIndicators = [
-    '[class*="cart-item"]',
-    '[class*="panier-item"]',
-    '[class*="basket-item"]',
-    '[data-testid*="cart"]',
-    '#cart-items',
-    '#panier-items',
-    '.cart-summary',
-    '.panier-recap'
-  ];
-  
-  for (const selector of cartIndicators) {
-    if (document.querySelector(selector)) return true;
-  }
-  
-  // Vérifier le titre de la page
-  const title = document.title.toLowerCase();
-  if (title.includes('panier') || title.includes('cart') || title.includes('basket')) {
+  // Recherche sans espaces (pour "Coca Cola" vs "CocaCola")
+  const textNoSpaces = normalizedText.replace(/\s/g, '');
+  const brandNoSpaces = normalizedBrand.replace(/\s/g, '');
+  if (textNoSpaces.includes(brandNoSpaces)) {
     return true;
   }
   
@@ -135,134 +116,145 @@ function isCartPage() {
 }
 
 // ====================================
-// SCAN DE LA PAGE
+// SCAN DE LA PAGE - APPROCHE SIMPLE
 // ====================================
 
-function scanPage() {
-  if (!isEnabled || boycottedBrands.length === 0) return;
-  
-  foundProducts = [];
-  
-  // Déterminer le site
-  const hostname = window.location.hostname;
-  let config = SITE_CONFIGS.default;
-  
-  for (const [site, siteConfig] of Object.entries(SITE_CONFIGS)) {
-    if (hostname.includes(site)) {
-      config = siteConfig;
-      break;
-    }
+function scanPageForBrands() {
+  if (!isEnabled || boycottedBrands.length === 0) {
+    console.log('[Boycott Checker] Scan annulé (désactivé ou pas de marques)');
+    return 0;
   }
   
-  // Chercher les produits dans la page
-  const products = findProducts(config);
+  console.log('[Boycott Checker] Début du scan...');
+  console.log('[Boycott Checker] Marques surveillées:', boycottedBrands);
   
-  // Analyser chaque produit
-  products.forEach(product => {
-    const productText = getProductText(product, config);
-    const matchedBrands = checkForBoycottedBrands(productText);
-    
-    if (matchedBrands.length > 0) {
-      foundProducts.push({
-        element: product,
-        text: productText,
-        brands: matchedBrands
-      });
-      highlightProduct(product, matchedBrands);
-    }
-  });
+  // Nettoyer les anciens résultats
+  removeHighlights();
+  foundElements = [];
   
-  // Afficher le résultat
-  if (foundProducts.length > 0) {
-    showAlertBanner();
-    incrementAlertCount();
-  } else {
-    removeAlertBanner();
-  }
+  // Récupérer tout le texte visible de la page
+  const pageText = document.body.innerText;
   
-  return foundProducts.length;
-}
-
-function findProducts(config) {
-  const products = [];
-  
-  // Essayer les sélecteurs spécifiques du site
-  const selectors = config.productSelector.split(', ');
-  
-  for (const selector of selectors) {
-    try {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach(el => {
-        // Éviter les doublons et les éléments trop petits
-        if (!products.includes(el) && el.textContent.trim().length > 10) {
-          products.push(el);
-        }
-      });
-    } catch (e) {}
-  }
-  
-  // Fallback: chercher dans tout le body
-  if (products.length === 0) {
-    const allElements = document.body.querySelectorAll('*');
-    allElements.forEach(el => {
-      const text = el.textContent.toLowerCase();
-      if ((text.includes('€') || text.includes('$') || text.includes('prix')) && 
-          el.children.length < 10 &&
-          el.textContent.trim().length > 20 &&
-          el.textContent.trim().length < 500) {
-        products.push(el);
-      }
-    });
-  }
-  
-  return products;
-}
-
-function getProductText(element, config) {
-  // Essayer d'abord les sélecteurs spécifiques pour le nom
-  const nameSelectors = config.nameSelector.split(', ');
-  
-  for (const selector of nameSelectors) {
-    try {
-      const nameEl = element.querySelector(selector);
-      if (nameEl && nameEl.textContent.trim()) {
-        return nameEl.textContent.trim();
-      }
-    } catch (e) {}
-  }
-  
-  // Fallback: tout le texte de l'élément
-  return element.textContent.trim();
-}
-
-function checkForBoycottedBrands(text) {
-  const matchedBrands = [];
-  const lowerText = text.toLowerCase();
+  // Vérifier quelles marques sont présentes dans la page
+  const brandsFoundInPage = [];
   
   for (const brand of boycottedBrands) {
-    const lowerBrand = brand.toLowerCase();
-    
-    // Recherche exacte avec limites de mots
-    const regex = new RegExp(`\\b${escapeRegex(lowerBrand)}\\b`, 'i');
-    if (regex.test(lowerText)) {
-      matchedBrands.push(brand);
+    if (brandMatchesText(brand, pageText)) {
+      brandsFoundInPage.push(brand);
+      console.log(`[Boycott Checker] ✓ Marque trouvée: ${brand}`);
     }
   }
   
-  return matchedBrands;
+  if (brandsFoundInPage.length === 0) {
+    console.log('[Boycott Checker] Aucune marque boycottée trouvée');
+    removeAlertBanner();
+    return 0;
+  }
+  
+  // Trouver et mettre en surbrillance les éléments contenant ces marques
+  const elementsWithBrands = findElementsWithBrands(brandsFoundInPage);
+  
+  console.log(`[Boycott Checker] ${elementsWithBrands.length} éléments trouvés`);
+  
+  // Mettre en surbrillance
+  elementsWithBrands.forEach(item => {
+    highlightElement(item.element, item.brands);
+    foundElements.push(item);
+  });
+  
+  // Afficher la bannière d'alerte
+  if (foundElements.length > 0) {
+    showAlertBanner(brandsFoundInPage);
+    incrementAlertCount();
+  }
+  
+  return foundElements.length;
 }
 
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function findElementsWithBrands(brandsToFind) {
+  const results = [];
+  const processedElements = new Set();
+  
+  // Parcourir tous les éléments de la page
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+  
+  let node;
+  while (node = walker.nextNode()) {
+    const text = node.textContent;
+    if (!text || text.trim().length < 3) continue;
+    
+    for (const brand of brandsToFind) {
+      if (brandMatchesText(brand, text)) {
+        // Trouver l'élément parent approprié (pas trop grand, pas trop petit)
+        let element = node.parentElement;
+        if (!element) continue;
+        
+        // Remonter jusqu'à trouver un élément de taille raisonnable
+        let attempts = 0;
+        while (element && 
+               element.innerText && 
+               element.innerText.length < 50 && 
+               element.parentElement &&
+               attempts < 5) {
+          element = element.parentElement;
+          attempts++;
+        }
+        
+        // Éviter les éléments trop grands (comme body, main, etc.)
+        const bigElements = ['BODY', 'MAIN', 'HTML', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'NAV'];
+        if (bigElements.includes(element.tagName) || element.innerText.length > 1500) {
+          // Utiliser l'élément parent direct du nœud texte
+          element = node.parentElement;
+        }
+        
+        // Éviter les doublons
+        if (element && !processedElements.has(element)) {
+          processedElements.add(element);
+          
+          // Trouver toutes les marques dans cet élément
+          const brandsInElement = brandsToFind.filter(b => 
+            brandMatchesText(b, element.innerText)
+          );
+          
+          if (brandsInElement.length > 0) {
+            results.push({
+              element: element,
+              text: element.innerText.substring(0, 100),
+              brands: brandsInElement
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return results;
 }
 
 // ====================================
 // MISE EN SURBRILLANCE
 // ====================================
 
-function highlightProduct(element, brands) {
-  // Ajouter une classe pour le style
+function highlightElement(element, brands) {
+  // Éviter de mettre en surbrillance nos propres éléments
+  if (element.classList.contains('boycott-checker-banner') ||
+      element.classList.contains('boycott-checker-badge')) {
+    return;
+  }
+  
+  // Ajouter la classe de surbrillance
   element.classList.add('boycott-checker-highlighted');
+  
+  // S'assurer que l'élément peut contenir le badge
+  const computedStyle = getComputedStyle(element);
+  if (computedStyle.position === 'static') {
+    element.style.position = 'relative';
+  }
   
   // Créer le badge d'alerte
   const badge = document.createElement('div');
@@ -275,19 +267,17 @@ function highlightProduct(element, brands) {
     </span>
   `;
   
-  // Positionner le badge
-  const rect = element.getBoundingClientRect();
-  if (getComputedStyle(element).position === 'static') {
-    element.style.position = 'relative';
-  }
-  
   element.appendChild(badge);
 }
 
 function removeHighlights() {
+  // Supprimer les classes
   document.querySelectorAll('.boycott-checker-highlighted').forEach(el => {
     el.classList.remove('boycott-checker-highlighted');
+    el.style.position = '';
   });
+  
+  // Supprimer les badges
   document.querySelectorAll('.boycott-checker-badge').forEach(el => {
     el.remove();
   });
@@ -297,10 +287,10 @@ function removeHighlights() {
 // BANNIÈRE D'ALERTE
 // ====================================
 
-function showAlertBanner() {
+function showAlertBanner(brands) {
   removeAlertBanner();
   
-  const brandsList = [...new Set(foundProducts.flatMap(p => p.brands))];
+  const uniqueBrands = [...new Set(brands)];
   
   alertBanner = document.createElement('div');
   alertBanner.className = 'boycott-checker-banner';
@@ -308,8 +298,8 @@ function showAlertBanner() {
     <div class="boycott-banner-content">
       <span class="boycott-banner-icon">⚠️</span>
       <div class="boycott-banner-text">
-        <strong>Attention !</strong> ${foundProducts.length} produit(s) de marque(s) boycottée(s) détecté(s) dans votre panier :
-        <span class="boycott-banner-brands">${brandsList.join(', ')}</span>
+        <strong>Attention !</strong> Produit(s) de marque(s) boycottée(s) détecté(s) sur cette page :
+        <span class="boycott-banner-brands">${uniqueBrands.join(', ')}</span>
       </div>
       <button class="boycott-banner-close" title="Fermer">×</button>
     </div>
@@ -333,7 +323,6 @@ function removeAlertBanner() {
     alertBanner.remove();
     alertBanner = null;
   }
-  // Supprimer aussi toutes les bannières existantes
   document.querySelectorAll('.boycott-checker-banner').forEach(el => el.remove());
 }
 
@@ -349,7 +338,6 @@ async function incrementAlertCount() {
     let alertsCount = result.alertsCount || 0;
     const alertsMonth = result.alertsMonth;
     
-    // Réinitialiser si nouveau mois
     if (alertsMonth !== currentMonth) {
       alertsCount = 0;
     }
@@ -361,31 +349,35 @@ async function incrementAlertCount() {
       alertsMonth: currentMonth 
     });
   } catch (error) {
-    console.error('[Boycott Checker] Erreur mise à jour stats:', error);
+    console.error('[Boycott Checker] Erreur stats:', error);
   }
 }
 
 // ====================================
-// OBSERVATION DU DOM (SPA)
+// OBSERVATION DU DOM
 // ====================================
 
 function observeDOM() {
   let timeout;
+  let lastScan = 0;
   
   const observer = new MutationObserver((mutations) => {
-    // Debounce pour éviter trop de scans
+    // Éviter de scanner trop souvent
+    const now = Date.now();
+    if (now - lastScan < 2000) return;
+    
     clearTimeout(timeout);
     timeout = setTimeout(() => {
-      if (isCartPage()) {
-        removeHighlights();
-        scanPage();
-      }
-    }, 500);
+      lastScan = Date.now();
+      console.log('[Boycott Checker] Changement DOM détecté, re-scan...');
+      scanPageForBrands();
+    }, 1500);
   });
   
   observer.observe(document.body, {
     childList: true,
-    subtree: true
+    subtree: true,
+    characterData: true
   });
 }
 
@@ -394,63 +386,68 @@ function observeDOM() {
 // ====================================
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[Boycott Checker] Message reçu:', message.type);
+  
   switch (message.type) {
     case 'UPDATE_BRANDS':
       boycottedBrands = message.brands || [];
       isEnabled = message.isEnabled;
+      console.log('[Boycott Checker] Marques mises à jour:', boycottedBrands.length);
+      
+      removeHighlights();
+      removeAlertBanner();
+      
       if (isEnabled) {
-        removeHighlights();
-        removeAlertBanner();
-        if (isCartPage()) {
-          scanPage();
-        }
-      } else {
-        removeHighlights();
-        removeAlertBanner();
+        setTimeout(() => scanPageForBrands(), 500);
       }
       sendResponse({ success: true });
       break;
       
     case 'SCAN_PAGE':
+      console.log('[Boycott Checker] Scan manuel demandé');
       removeHighlights();
       removeAlertBanner();
-      const found = scanPage();
-      sendResponse({ found });
-      break;
+      
+      // Recharger les settings avant de scanner
+      loadSettings().then(() => {
+        const found = scanPageForBrands();
+        sendResponse({ found });
+      });
+      return true; // Réponse asynchrone
       
     case 'GET_STATUS':
       sendResponse({ 
-        isCartPage: isCartPage(),
-        foundProducts: foundProducts.length,
+        foundCount: foundElements.length,
+        brands: boycottedBrands.length,
         isEnabled
       });
       break;
   }
   
-  return true; // Garde le canal ouvert pour les réponses asynchrones
+  return true;
 });
 
 // ====================================
 // DÉMARRAGE
 // ====================================
 
-// Attendre que le DOM soit prêt
+// Attendre que le DOM soit complètement chargé
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
+} else if (document.readyState === 'interactive') {
+  setTimeout(init, 500);
 } else {
   init();
 }
 
-// Re-scanner lors de la navigation (pour les SPA)
+// Re-scanner lors de la navigation
 window.addEventListener('popstate', () => {
-  setTimeout(() => {
-    if (isCartPage()) {
-      removeHighlights();
-      scanPage();
-    } else {
-      removeHighlights();
-      removeAlertBanner();
-    }
-  }, 500);
+  setTimeout(scanPageForBrands, 1000);
 });
 
+// Re-scanner quand la page est complètement chargée
+window.addEventListener('load', () => {
+  setTimeout(scanPageForBrands, 1500);
+});
+
+console.log('[Boycott Checker] Content script chargé');

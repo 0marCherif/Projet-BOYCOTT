@@ -57,7 +57,20 @@ function getDefaultBrands() {
     'Danone',
     'Puma',
     'HP',
-    'Carrefour'
+    'Carrefour',
+    'Lay\'s',
+    'Doritos',
+    'Lipton',
+    'Schweppes',
+    'Fanta',
+    'Sprite',
+    'Tropicana',
+    'Activia',
+    'Evian',
+    'Maggi',
+    'Nescafé',
+    'Kit Kat',
+    'Häagen-Dazs'
   ];
 }
 
