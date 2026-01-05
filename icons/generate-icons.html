@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Générateur d'icônes - Boycott Checker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #1a1a1a;
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+    h1 { color: #ff4757; }
+    .canvas-container {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin: 30px 0;
+    }
+    .canvas-item {
+      background: #252525;
+      padding: 20px;
+      border-radius: 12px;
+    }
+    .canvas-item p {
+      margin-top: 10px;
+      color: #888;
+    }
+    canvas { display: block; margin: 0 auto; }
+    button {
+      background: linear-gradient(135deg, #ff4757, #ff8a80);
+      border: none;
+      color: white;
+      padding: 15px 30px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover { transform: scale(1.05); }
+    .instructions {
+      background: #252525;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 600px;
+      margin: 30px auto;
+      text-align: left;
+    }
+    .instructions h2 { color: #ff4757; }
+    .instructions ol { line-height: 1.8; }
+    a { color: #ff4757; }
+  </style>
+</head>
+<body>
+  <h1>🚫 Générateur d'icônes - Boycott Checker</h1>
+  <p>Cliquez sur le bouton pour générer et télécharger toutes les icônes</p>
+
+  <div class="canvas-container">
+    <div class="canvas-item">
+      <canvas id="icon16" width="16" height="16"></canvas>
+      <p>16x16</p>
+    </div>
+    <div class="canvas-item">
+      <canvas id="icon32" width="32" height="32"></canvas>
+      <p>32x32</p>
+    </div>
+    <div class="canvas-item">
+      <canvas id="icon48" width="48" height="48"></canvas>
+      <p>48x48</p>
+    </div>
+    <div class="canvas-item">
+      <canvas id="icon128" width="128" height="128"></canvas>
+      <p>128x128</p>
+    </div>
+  </div>
+
+  <button onclick="downloadAll()">📥 Télécharger toutes les icônes</button>
+
+  <div class="instructions">
+    <h2>📋 Instructions</h2>
+    <ol>
+      <li>Ouvrez ce fichier dans votre navigateur</li>
+      <li>Cliquez sur "Télécharger toutes les icônes"</li>
+      <li>Placez les fichiers téléchargés dans le dossier <code>icons/</code></li>
+      <li>Vous pouvez ensuite charger l'extension dans Chrome</li>
+    </ol>
+  </div>
+
+  <script>
+    const sizes = [16, 32, 48, 128];
+    
+    function drawIcon(canvas, size) {
+      const ctx = canvas.getContext('2d');
+      const center = size / 2;
+      const radius = size * 0.42;
+      
+      // Fond avec dégradé
+      const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
+      gradient.addColorStop(0, '#ff6b7a');
+      gradient.addColorStop(1, '#ff4757');
+      
+      // Cercle principal
+      ctx.beginPath();
+      ctx.arc(center, center, radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      
+      // Ombre
+      ctx.shadowColor = 'rgba(255, 71, 87, 0.5)';
+      ctx.shadowBlur = size * 0.1;
+      
+      // Barre diagonale (symbole interdit)
+      const barWidth = size * 0.12;
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = barWidth;
+      ctx.lineCap = 'round';
+      
+      const offset = radius * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(center - offset, center + offset);
+      ctx.lineTo(center + offset, center - offset);
+      ctx.stroke();
+      
+      // Bordure du cercle
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = size * 0.08;
+      ctx.beginPath();
+      ctx.arc(center, center, radius * 0.85, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // Dessiner toutes les icônes
+    sizes.forEach(size => {
+      const canvas = document.getElementById(`icon${size}`);
+      drawIcon(canvas, size);
+    });
+    
+    function downloadAll() {
+      sizes.forEach(size => {
+        const canvas = document.getElementById(`icon${size}`);
+        const link = document.createElement('a');
+        link.download = `icon${size}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+  </script>
+</body>
+</html>
+

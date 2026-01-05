@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boycott Checker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🚫</span>
+        <h1>Boycott Checker</h1>
+      </div>
+      <div class="toggle-container">
+        <label class="toggle">
+          <input type="checkbox" id="extensionToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </header>
+
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot"></span>
+      <span class="status-text">Extension active</span>
+    </div>
+
+    <section class="section">
+      <h2>📋 Marques à boycotter</h2>
+      <div class="brand-input-container">
+        <input type="text" id="brandInput" placeholder="Ajouter une marque..." autocomplete="off">
+        <button id="addBrandBtn" class="btn-add">+</button>
+      </div>
+      <div class="brands-list" id="brandsList">
+        <!-- Les marques seront ajoutées dynamiquement -->
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>⚡ Actions rapides</h2>
+      <button id="scanPageBtn" class="btn-action">
+        <span class="btn-icon">🔍</span>
+        Scanner cette page
+      </button>
+      <button id="importListBtn" class="btn-action btn-secondary">
+        <span class="btn-icon">📥</span>
+        Importer une liste
+      </button>
+      <button id="exportListBtn" class="btn-action btn-secondary">
+        <span class="btn-icon">📤</span>
+        Exporter ma liste
+      </button>
+    </section>
+
+    <section class="section stats-section">
+      <h2>📊 Statistiques</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value" id="brandsCount">0</span>
+          <span class="stat-label">Marques suivies</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="alertsCount">0</span>
+          <span class="stat-label">Alertes ce mois</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>Boycott Checker v1.0 • Fait avec ❤️ pour un monde meilleur</p>
+    </footer>
+  </div>
+
+  <!-- Modal d'import -->
+  <div class="modal" id="importModal">
+    <div class="modal-content">
+      <h3>Importer une liste</h3>
+      <textarea id="importTextarea" placeholder="Collez vos marques ici (une par ligne)"></textarea>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="cancelImportBtn">Annuler</button>
+        <button class="btn-confirm" id="confirmImportBtn">Importer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast">
+    <span class="toast-icon">✓</span>
+    <span class="toast-message" id="toastMessage"></span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
